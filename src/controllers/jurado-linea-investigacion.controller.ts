@@ -16,7 +16,8 @@ import {
   requestBody
 } from '@loopback/rest';
 import {
-  ArregloLineaInvestigacion, Jurado,
+  ArregloLineaInvestigacion,
+  Jurado,
   JuradoLineaInvestigacion,
   LineaInvestigacion
 } from '../models';
@@ -112,6 +113,39 @@ export class JuradoLineaInvestigacionController {
 
 
   //////////////
+@post('/relacionar-jurados-area-investigacions/{id}', {
+  responses: {
+    '200': {
+      description: 'create a AreaInvestigacion model instance',
+      content: {'application/json': {schema: getModelSchemaRef(JuradoLineaInvestigacion)}},
+    },
+  },
+})
+async createRelations(
+
+  @requestBody({
+    content: {
+      'application/json': {
+        schema: getModelSchemaRef(ArregloLineaInvestigacion, {}),
+      },
+    },
+  }) datos: ArregloLineaInvestigacion,
+  @param.path.number('id') id_jurado: typeof Jurado.prototype.id
+): Promise<Boolean> {
+  if (datos.lineas_investigacion.length>0) {
+    datos.lineas_investigacion.forEach((id_linea: number) =>{
+      this.JuradoLineaInvestigacionRepository.create({
+        id_Jurado: id_jurado,
+        id_lineainvestigacion: id_linea
+      })
+    })
+    return true
+
+  }
+return false
+
+}
+//////////////
 @post('/jurados-area-investigacions', {
   responses: {
     '200': {
@@ -137,38 +171,5 @@ async createRelation(
     return registro
 
 
-}
-//////////////
-@post('/relacionar-jurados-linea-investigacions', {
-  responses: {
-    '200': {
-      description: 'create a AreaInvestigacion model instance',
-      content: {'application/json': {schema: getModelSchemaRef(JuradoLineaInvestigacion)}},
-    },
-  },
-})
-async createRelations(
-  @requestBody({
-    content: {
-      'application/json': {
-        schema: getModelSchemaRef(ArregloLineaInvestigacion,{}),
-      },
-    },
-  }) datos:ArregloLineaInvestigacion,
-  @param.path.number('id') id_Jurado: typeof Jurado.prototype.id
-
-): Promise<Boolean> {
-
-  if (datos.lineas_investigacion.length>0) {
-
-    datos.lineas_investigacion.forEach((id_linea:number)=>{
-      this.JuradoLineaInvestigacionRepository.create({
-        id_Jurado: id_Jurado,
-        id_lineainvestigacion: id_linea
-      })
-    })
-    return true
-  }
-    return false
 }
 }
