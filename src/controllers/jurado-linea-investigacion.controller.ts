@@ -112,7 +112,7 @@ export class JuradoLineaInvestigacionController {
 
 
   //////////////
-  @post('/relacionar-jurados-area-investigacions/{id}', {
+  @post('/relacionar-jurados-linea-investigacions/{id}', {
     responses: {
       '200': {
         description: 'create a AreaInvestigacion model instance',
@@ -132,11 +132,19 @@ export class JuradoLineaInvestigacionController {
     @param.path.number('id') id_jurado: typeof Jurado.prototype.id
   ): Promise<Boolean> {
     if (datos.lineas_investigacion.length > 0) {
-      datos.lineas_investigacion.forEach((id_linea: number) => {
-        this.JuradoLineaInvestigacionRepository.create({
-          id_Jurado: id_jurado,
-          id_lineainvestigacion: id_linea
+      datos.lineas_investigacion.forEach(async(id_linea: number) => {
+        let existe = await this.JuradoLineaInvestigacionRepository.findOne({
+          where: {
+            id_Jurado: id_jurado,
+            id_lineainvestigacion: id_linea
+          }
         })
+        if (!existe) {
+          this.JuradoLineaInvestigacionRepository.create({
+            id_Jurado: id_jurado,
+            id_lineainvestigacion: id_linea,
+          })
+        }
       })
       return true
 
@@ -145,7 +153,7 @@ export class JuradoLineaInvestigacionController {
 
   }
   //////////////
-  @post('/jurados-area-investigacions', {
+  @post('/jurados-linea-investigacions', {
     responses: {
       '200': {
         description: 'create a AreaInvestigacion model instance',
@@ -179,18 +187,18 @@ export class JuradoLineaInvestigacionController {
   async Eliminarjuradolinea(
     @param.path.number('id_jurado') id_jurado: number,
     @param.path.number('id_linea') id_linea: number): Promise<Boolean> {
-      let reg = await this.JuradoLineaInvestigacionRepository.findOne({
-        where:{
-          id_Jurado: id_jurado,
-          id_lineainvestigacion: id_linea
-        }
-      })
-      if (reg) {
-        await this.JuradoLineaInvestigacionRepository.deleteById(reg.id);
-        return true
+    let reg = await this.JuradoLineaInvestigacionRepository.findOne({
+      where: {
+        id_Jurado: id_jurado,
+        id_lineainvestigacion: id_linea
       }
-      return false
+    })
+    if (reg) {
+      await this.JuradoLineaInvestigacionRepository.deleteById(reg.id);
+      return true
     }
+    return false
+  }
 
 
 

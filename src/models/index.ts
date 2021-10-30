@@ -5,3 +5,4 @@ export * from './linea-investigacion.model';
 export * from './usuario-jurado.model';
 
 
+export * from './credenciales.model';

@@ -1,29 +1,29 @@
+import {service} from '@loopback/core';
 import {
   Count,
   CountSchema,
   Filter,
   FilterExcludingWhere,
   repository,
-  Where,
+  Where
 } from '@loopback/repository';
 import {
-  post,
-  param,
-  get,
-  getModelSchemaRef,
-  patch,
-  put,
-  del,
-  requestBody,
-  response,
+  del, get,
+  getModelSchemaRef, param, patch, post, put, requestBody,
+  response
 } from '@loopback/rest';
 import {Jurado} from '../models';
-import {JuradoRepository} from '../repositories';
+import {JuradoRepository, UsuarioJuradoRepository} from '../repositories';
+import {AdministradorClavesService} from '../services';
 
 export class JuradoController {
   constructor(
     @repository(JuradoRepository)
     public juradoRepository : JuradoRepository,
+    @repository(UsuarioJuradoRepository)
+    public usuarioJuradoRepository :UsuarioJuradoRepository,
+    @service(AdministradorClavesService)
+    public servicioClaves: AdministradorClavesService,
   ) {}
 
   @post('/jurados')
@@ -43,8 +43,32 @@ export class JuradoController {
       },
     })
     jurado: Omit<Jurado, 'id'>,
-  ): Promise<Jurado> {
-    return this.juradoRepository.create(jurado);
+  ): Promise<Boolean> {
+
+
+    let juradoListo = await this.juradoRepository.create(jurado);
+
+
+
+    if (juradoListo) {
+      let clave = this.servicioClaves.CrearClaveAleatoria()
+      console.log(clave)
+      //Enviar clave por correo electronico
+      let claveCifrada = this.servicioClaves.CifrarTexto(clave)
+
+      this.usuarioJuradoRepository.create({
+        usuario: jurado.correo,
+        clave: claveCifrada,
+        id_jurado: juradoListo.getId()
+      })
+
+      //Enviar clave por correo electronico
+    }
+
+
+
+
+    return true
   }
 
   @get('/jurados/count')
