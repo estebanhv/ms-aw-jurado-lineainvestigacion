@@ -1,3 +1,4 @@
+import {service} from '@loopback/core';
 import {
   Count,
   CountSchema,
@@ -16,16 +17,23 @@ import {
   requestBody,
   response
 } from '@loopback/rest';
+import {Configuracion} from '../key/configuracion';
 import {
-  Credenciales, Jurado,
-  UsuarioJurado
+  CambioClave, Credenciales, CredencialesRecuperarClave, Jurado, NotificacionCorreo, NotificacionSms, UsuarioJurado
 } from '../models';
 import {JuradoRepository, UsuarioJuradoRepository} from '../repositories';
+import {AdministradorClavesService, NotificacionesService, SesionUsuariosService} from '../services';
 
 export class JuradoUsuarioJuradoController {
   constructor(
     @repository(JuradoRepository) protected juradoRepository: JuradoRepository,
-    @repository(UsuarioJuradoRepository) protected usuarioJuradoRepository:UsuarioJuradoRepository
+    @repository(UsuarioJuradoRepository) protected usuarioJuradoRepository: UsuarioJuradoRepository,
+    @service(AdministradorClavesService)
+    public servicioClaves: AdministradorClavesService,
+    @service(NotificacionesService)
+    private notificacionesService: NotificacionesService,
+    @service(SesionUsuariosService)
+    private servicioSesionUsuario: SesionUsuariosService,
   ) { }
 
   @get('/jurados/{id}/usuario-jurado', {
@@ -127,56 +135,121 @@ export class JuradoUsuarioJuradoController {
   ): Promise<UsuarioJurado[]> {
     return this.usuarioJuradoRepository.find(filter);
   }
-///////
+  ///////
 
-@post('/reconocer-usuario')
-@response(200, {
-  description: 'Reconocer los usuarios',
-  content: {'application/json': {schema: getModelSchemaRef(Credenciales)}},
-})
-async reconocerUsuario(
-  @requestBody({
-    content: {
-      'application/json': {
-        schema: getModelSchemaRef(Credenciales, {
-          title: 'Identificar Usuario'
-        }),
+  @post('/reconocer-usuario')
+  @response(200, {
+    description: 'Reconocer los usuarios',
+    content: {'application/json': {schema: getModelSchemaRef(Credenciales)}},
+  })
+  async reconocerUsuario(
+    @requestBody({
+      content: {
+        'application/json': {
+          schema: getModelSchemaRef(Credenciales, {
+            title: 'Identificar Usuario'
+          }),
+        },
       },
-    },
-  })
-  credenciales: Credenciales,
-): Promise<object | null> {
-
-  let usuario = await this.usuarioJuradoRepository.findOne({
-    where: {
-      usuario: credenciales.usuario,
-      clave: credenciales.clave
-    }
-  })
-
-
-  if (usuario) {
-    //Generar token y añadirlo a la respuesta
-    let jurado = await this.juradoRepository.findOne({
-      where:{
-        id:  usuario?.id_jurado,
-
-      }
     })
+    credenciales: Credenciales,
+  ): Promise<object | null> {
+    let usuario= await this.servicioSesionUsuario.IdentificarUsuario(credenciales)
+    let tk=""
+    if (usuario) {
+      usuario.clave=""
+       tk = await this.servicioSesionUsuario.GenerarToken(usuario)
+      //Generar token y añadirlo a la respuesta
 
-    return jurado
+    }return {
+      token: tk,
+      usuario:usuario
+    }
+
   }
 
 
-  return {respuesta :"Datos incorrectos"}
 
 
 
 
-}
+
+  @post('/cambiar-clave')
+  @response(200, {
+    description: 'Reconocer los usuarios',
+    content: {'application/json': {schema: getModelSchemaRef(CambioClave)}},
+  })
+  async cambiarClave(
+    @requestBody({
+      content: {
+        'application/json': {
+          schema: getModelSchemaRef(CambioClave, {
+            title: 'Cambiar clave'
+          }),
+        },
+      },
+    })
+    credencialesClave: CambioClave,
+  ): Promise<Boolean> {
+    let usuario = await this.servicioClaves.CambiarClave(credencialesClave)
+    let jura = await this.juradoRepository.findById(usuario?.id_jurado)
+    if (usuario) {
+      let datos = new NotificacionCorreo()
+      datos.destinatario = usuario.usuario
+      datos.asunto = Configuracion.asuntoCambioClave
+      datos.mensaje = `Hola ${jura.nombre} <br/>${Configuracion.mensajeCambioClave}`
+      this.notificacionesService.EnviarCorreo(datos)
+      //Invocar al servicio de notificaciones para enviar correo al usuario
+
+    }
+
+
+    return usuario != null
+
+  }
+
+
+  @post('/recuperar-clave')
+  @response(200, {
+    description: 'Recuperar clave de los usuarios',
+    content: {'application/json': {schema: {}}},
+  })
+  async recuperarClave(
+    @requestBody({
+      content: {
+        'application/json': {
+        },
+      },
+    })
+    credenciales: CredencialesRecuperarClave,
+  ): Promise<UsuarioJurado | null> {
+    let usuario = await this.usuarioJuradoRepository.findOne({
+      where: {
+
+        usuario: credenciales.correo
+      }
+    })
+    let jura = await this.juradoRepository.findById(usuario?.id_jurado)
+
+    if (usuario) {
+      let clave = this.servicioClaves.CrearClaveAleatoria()
+      usuario.clave = this.servicioClaves.CifrarTexto(clave)
+      await this.usuarioJuradoRepository.updateById(usuario.id, usuario);
+
+      let datos = new NotificacionSms()
+      datos.destino = jura.telefono
+      datos.mensaje = Configuracion.asuntoCambioClave
+      datos.mensaje = `Hola ${jura.nombre} ${Configuracion.mensajeRecuperarClave} ${clave}`
 
 
 
+      this.notificacionesService.EnviarSms(datos)
+    }
+
+
+    return usuario
+
+  }
 
 
 

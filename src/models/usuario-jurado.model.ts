@@ -27,6 +27,13 @@ export class UsuarioJurado extends Entity {
   usuario: string;
 
   @property({
+    type: 'number',
+  })
+  rolJurado?: number;
+
+
+
+  @property({
     type: 'string',
     required: false,
   })

@@ -1,3 +1,4 @@
+import {authenticate} from '@loopback/authentication';
 import {service} from '@loopback/core';
 import {
   Count,
@@ -12,19 +13,22 @@ import {
   getModelSchemaRef, param, patch, post, put, requestBody,
   response
 } from '@loopback/rest';
-import {Jurado} from '../models';
+import {Configuracion} from '../key/configuracion';
+import {Jurado, NotificacionCorreo} from '../models';
 import {JuradoRepository, UsuarioJuradoRepository} from '../repositories';
-import {AdministradorClavesService} from '../services';
-
+import {AdministradorClavesService, NotificacionesService} from '../services';
+@authenticate("admin","jury")
 export class JuradoController {
   constructor(
     @repository(JuradoRepository)
-    public juradoRepository : JuradoRepository,
+    public juradoRepository: JuradoRepository,
     @repository(UsuarioJuradoRepository)
-    public usuarioJuradoRepository :UsuarioJuradoRepository,
+    public usuarioJuradoRepository: UsuarioJuradoRepository,
     @service(AdministradorClavesService)
     public servicioClaves: AdministradorClavesService,
-  ) {}
+    @service(NotificacionesService)
+    private notificacionesService: NotificacionesService
+  ) { }
 
   @post('/jurados')
   @response(200, {
@@ -45,29 +49,42 @@ export class JuradoController {
     jurado: Omit<Jurado, 'id'>,
   ): Promise<Boolean> {
 
+    let existe = await this.juradoRepository.findOne({
+      where: {
+        correo: jurado.correo
 
-    let juradoListo = await this.juradoRepository.create(jurado);
+      }
+    })
 
+    if (!existe) {
+      let juradoListo = await this.juradoRepository.create(jurado);
 
+      if (juradoListo) {
+        let clave = this.servicioClaves.CrearClaveAleatoria()
+        console.log(clave)
+        //Enviar clave por correo electronico
+        let claveCifrada = this.servicioClaves.CifrarTexto(clave)
 
-    if (juradoListo) {
-      let clave = this.servicioClaves.CrearClaveAleatoria()
-      console.log(clave)
-      //Enviar clave por correo electronico
-      let claveCifrada = this.servicioClaves.CifrarTexto(clave)
-
-      this.usuarioJuradoRepository.create({
-        usuario: jurado.correo,
-        clave: claveCifrada,
-        id_jurado: juradoListo.getId()
-      })
-
-      //Enviar clave por correo electronico
+        let usuarioj = await this.usuarioJuradoRepository.create({
+          usuario: jurado.correo,
+          clave: claveCifrada,
+          id_jurado: juradoListo.getId(),
+          rolJurado: 123
+        })
+        if (usuarioj) {
+          let datos = new NotificacionCorreo()
+          datos.destinatario = usuarioj.usuario
+          datos.asunto = Configuracion.asuntoCreacionUsuario
+          datos.mensaje = `Hola ${juradoListo.nombre} <br/>${Configuracion.mensajeCreacionUsuario} ${clave}`
+          this.notificacionesService.EnviarCorreo(datos)
+          //Enviar clave por correo electronico
+        }
+      }
+    } else {
+      return false
     }
 
-
-
-
+    //Enviar clave por correo electronico y usuario
     return true
   }
 
