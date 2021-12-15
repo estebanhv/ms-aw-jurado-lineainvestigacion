@@ -1,4 +1,3 @@
-import {authenticate} from '@loopback/authentication';
 import {service} from '@loopback/core';
 import {
   Count,
@@ -10,14 +9,14 @@ import {
 } from '@loopback/repository';
 import {
   del, get,
-  getModelSchemaRef, param, patch, post, put, requestBody,
+  getModelSchemaRef, HttpErrors, param, patch, post, put, requestBody,
   response
 } from '@loopback/rest';
 import {Configuracion} from '../key/configuracion';
-import {Jurado, NotificacionCorreo} from '../models';
+import {ArregloJurados, Jurado, NotificacionCorreo} from '../models';
 import {JuradoRepository, UsuarioJuradoRepository} from '../repositories';
 import {AdministradorClavesService, NotificacionesService} from '../services';
-@authenticate("admin","jury")
+//@authenticate("admin")
 export class JuradoController {
   constructor(
     @repository(JuradoRepository)
@@ -47,7 +46,7 @@ export class JuradoController {
       },
     })
     jurado: Omit<Jurado, 'id'>,
-  ): Promise<Boolean> {
+  ): Promise<Jurado> {
 
     let existe = await this.juradoRepository.findOne({
       where: {
@@ -79,13 +78,13 @@ export class JuradoController {
           this.notificacionesService.EnviarCorreo(datos)
           //Enviar clave por correo electronico
         }
+        return juradoListo
+      } else {
+        throw new HttpErrors[400](`Error`)
       }
     } else {
-      return false
+      throw new HttpErrors[400](`Entity is already exists in the database: Jurado with correo ${jurado.correo} already exists`)
     }
-
-    //Enviar clave por correo electronico y usuario
-    return true
   }
 
   @get('/jurados/count')
@@ -188,4 +187,76 @@ export class JuradoController {
   async deleteById(@param.path.number('id') id: number): Promise<void> {
     await this.juradoRepository.deleteById(id);
   }
+
+
+
+
+  //////////////
+  @post('/JuradoArreglos', {
+    responses: {
+      '200': {
+        description: 'create a AreaInvestigacion model instance',
+        content: {'application/json': {schema: getModelSchemaRef(Jurado)}},
+      },
+    },
+  })
+  async createRelations(
+    @requestBody({
+      content: {
+        'application/json': {
+          schema: getModelSchemaRef(ArregloJurados, {}),
+        },
+      },
+    }) datos: ArregloJurados,
+
+  ): Promise<Boolean> {
+    if (datos.jurados.length > 0) {
+      for (let t of datos.jurados) {
+        let existe = await this.juradoRepository.findOne({
+          where: {
+
+            correo: t.correo
+
+          }
+        })
+        if (!existe) {
+
+          let juradoListo = await this.juradoRepository.create(t);
+
+          if (juradoListo) {
+            let clave = this.servicioClaves.CrearClaveAleatoria()
+            console.log(clave)
+            //Enviar clave por correo electronico
+            let claveCifrada = this.servicioClaves.CifrarTexto(clave)
+
+            let usuarioj = await this.usuarioJuradoRepository.create({
+              usuario: t.correo,
+              clave: claveCifrada,
+              id_jurado: juradoListo.getId(),
+              rolJurado: 123
+            })
+            if (usuarioj) {
+              let datos = new NotificacionCorreo()
+              datos.destinatario = usuarioj.usuario
+              datos.asunto = Configuracion.asuntoCreacionUsuario
+              datos.mensaje = `Hola ${juradoListo.nombre} <br/>${Configuracion.mensajeCreacionUsuario} ${clave}`
+              this.notificacionesService.EnviarCorreo(datos)
+              //Enviar clave por correo electronico
+            }
+          }
+        }
+      }
+      return true
+
+    }
+    return false
+
+  }
+
+
+
+
+
+
+
 }

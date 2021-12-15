@@ -11,3 +11,4 @@ export * from './usuario-jurado.model';
 
 
 
+export * from './arreglo-jurados.model';

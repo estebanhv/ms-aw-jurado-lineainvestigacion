@@ -1,3 +1,4 @@
+import {authenticate} from '@loopback/authentication';
 import {service} from '@loopback/core';
 import {
   Count,
@@ -11,6 +12,7 @@ import {
   get,
   getModelSchemaRef,
   getWhereSchemaFor,
+  HttpErrors,
   param,
   patch,
   post,
@@ -23,7 +25,7 @@ import {
 } from '../models';
 import {JuradoRepository, UsuarioJuradoRepository} from '../repositories';
 import {AdministradorClavesService, NotificacionesService, SesionUsuariosService} from '../services';
-
+@authenticate("admin")
 export class JuradoUsuarioJuradoController {
   constructor(
     @repository(JuradoRepository) protected juradoRepository: JuradoRepository,
@@ -136,7 +138,7 @@ export class JuradoUsuarioJuradoController {
     return this.usuarioJuradoRepository.find(filter);
   }
   ///////
-
+  @authenticate.skip()
   @post('/reconocer-usuario')
   @response(200, {
     description: 'Reconocer los usuarios',
@@ -160,11 +162,12 @@ export class JuradoUsuarioJuradoController {
       usuario.clave=""
        tk = await this.servicioSesionUsuario.GenerarToken(usuario)
       //Generar token y añadirlo a la respuesta
+      return {
+        token: tk,
+        usuario:usuario
+      }
+    }throw new HttpErrors[400]("Datos invalidos");
 
-    }return {
-      token: tk,
-      usuario:usuario
-    }
 
   }
 
@@ -173,7 +176,7 @@ export class JuradoUsuarioJuradoController {
 
 
 
-
+  @authenticate("jury")
   @post('/cambiar-clave')
   @response(200, {
     description: 'Reconocer los usuarios',
@@ -200,15 +203,15 @@ export class JuradoUsuarioJuradoController {
       datos.mensaje = `Hola ${jura.nombre} <br/>${Configuracion.mensajeCambioClave}`
       this.notificacionesService.EnviarCorreo(datos)
       //Invocar al servicio de notificaciones para enviar correo al usuario
-
+      return usuario != null
     }
+    throw new HttpErrors[400]("Datos invalidos");
 
 
-    return usuario != null
 
   }
 
-
+  @authenticate.skip()
   @post('/recuperar-clave')
   @response(200, {
     description: 'Recuperar clave de los usuarios',
@@ -233,6 +236,7 @@ export class JuradoUsuarioJuradoController {
 
     if (usuario) {
       let clave = this.servicioClaves.CrearClaveAleatoria()
+      console.log(clave)
       usuario.clave = this.servicioClaves.CifrarTexto(clave)
       await this.usuarioJuradoRepository.updateById(usuario.id, usuario);
 
@@ -244,10 +248,14 @@ export class JuradoUsuarioJuradoController {
 
 
       this.notificacionesService.EnviarSms(datos)
+      return usuario
     }
 
+    throw new HttpErrors[400]("Datos invalidos");
 
-    return usuario
+
+
+
 
   }
 
